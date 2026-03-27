@@ -1,0 +1,46 @@
+.App {
+  display: flex;
+  flex-direction: row;
+  margin: 35px 10px 0px;
+}
+
+div#main-view {
+  flex-basis: 50%;
+}
+
+div#form-view {
+  flex-basis: 20%;
+}
+
+div#chat-view {
+  flex-basis: 30%;
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  z-index: 100;
+}
+
+.bookshelf-container {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.pagination-menu {
+  display: flex;
+  width: fit-content;
+  margin: 0px auto;
+  text-align: center;
+}
+
+
+.page-num {
+  display: inline-block;
+  margin: 0px 3px;
+}
+
+.page-num.active {
+  color: blue;
+  font-weight: bolder;
+}

@@ -1,0 +1,15 @@
+# Credenciales — nunca subir al repositorio
+.env
+
+# Entorno virtual Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Dependencias Node.js
+frontend/node_modules/
+node_modules/
+
+# Logs
+*.log
