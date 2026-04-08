@@ -50,7 +50,7 @@ LLM_MODEL = os.getenv("LLM_MODEL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 EMBED_DIM = int(os.getenv("EMBED_DIM", 768))
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "rag_books", "docs")
+DOCS_DIR = os.path.join(os.path.dirname(__file__), "rag_books", "docs")
 
 # Umbral de similitud para decidir dónde cortar:
 # - valor bajo (50) → chunks más pequeños, más cortes
@@ -147,7 +147,7 @@ def build_index():
 
 # --- Generación directa con Ollama REST ---
 def generate_answer_stream(query: str, nodes: list):
-    MIN_SCORE = 0.65
+    MIN_SCORE = 0.60
     nodes = [n for n in nodes if n.score is None or n.score >= MIN_SCORE]
 
     if not nodes:

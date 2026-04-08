@@ -6,7 +6,8 @@ Funciones:
     translate_ca_to_en(text)  →  traduce catalán a inglés
     translate_en_to_ca(text)  →  traduce inglés a catalán
 
-Usa el LLM configurado en .env (OLLAMA_URL + LLM_MODEL).
+Usa TRANSLATION_MODEL de .env para las traducciones (separado del LLM_MODEL del RAG).
+Si TRANSLATION_MODEL no está definido, usa LLM_MODEL como fallback.
 """
 
 import os
@@ -17,6 +18,8 @@ load_dotenv()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 LLM_MODEL = os.getenv("LLM_MODEL", "mistral:7b-instruct-q4_0")
+TRANSLATION_MODEL = os.getenv("TRANSLATION_MODEL", LLM_MODEL)
+TRANSLATION_MODEL_CA = os.getenv("TRANSLATION_MODEL_CA", TRANSLATION_MODEL)
 
 
 def translate_ca_to_en(text: str) -> str:
@@ -29,7 +32,7 @@ def translate_ca_to_en(text: str) -> str:
     )
     resp = requests.post(
         f"{OLLAMA_URL}/api/generate",
-        json={"model": LLM_MODEL, "prompt": prompt, "stream": False},
+        json={"model": TRANSLATION_MODEL, "prompt": prompt, "stream": False},
         timeout=60,
     )
     resp.raise_for_status()
@@ -46,7 +49,7 @@ def translate_en_to_ca(text: str) -> str:
     )
     resp = requests.post(
         f"{OLLAMA_URL}/api/generate",
-        json={"model": LLM_MODEL, "prompt": prompt, "stream": False},
+        json={"model": TRANSLATION_MODEL_CA, "prompt": prompt, "stream": False},
         timeout=120,
     )
     resp.raise_for_status()

@@ -431,4 +431,103 @@ GPU:     opcional — con GPU VRAM ≥6 GB la inferencia baja a <1 s/consulta
 
 ---
 
-*Conclusión añadida el 7 de abril de 2026 · Modelos probados: 8 · Versiones RAG: 4 · Total pruebas: 32*
+*Conclusió añadida el 7 de abril de 2026 · Modelos probados: 8 · Versiones RAG: 4
+
+---
+
+## Pipeline Ca→En→Ca — Prueba con documentos en catalán
+
+**Descripción del pipeline:**
+1. El usuario escribe la pregunta **en catalán**
+2. Se traduce al inglés con el LLM (`translate_ca_to_en`)
+3. Se busca en los documentos **en inglés** (indexados con embeddings ingleses)
+4. El LLM genera la respuesta **en inglés**
+5. Se traduce la respuesta completa al catalán (`translate_en_to_ca`) y se envía por SSE
+
+**LLM:** `mistral:7b-instruct-q4_0` · **Embeddings:** `nomic-embed-text`  
+**Documentos indexados:** `*_en.txt` (traducciones al inglés de los 4 libros en catalán)  
+**Pregunta de prueba (catalán):** *"Qui va matar els pares de Harry Potter?"*  
+**Traducción al inglés enviada al LLM:** *"Who is killing Harry Potter's parents?"*  
+**MIN_SCORE ajustado:** 0.60 en v3 y v5 (los embeddings de los docs traducidos tienen scores ligeramente más bajos que los originales)
+
+### Resultados
+
+| Versión | Estrategia | Nodos | Respuesta obtenida (en catalán) | Correcta |
+|---|---|---|---|---|
+| **v2** | Flat chunks (500 chars) | 124 | *"Voldemort matò Harry Potter's parets en 31 d'octubre de 1981."* | ⚠️ |
+| **v3** | Jerárquico HierarchicalNodeParser | 65 | *"Lord Voldemort (Tom Riddle), l'assesor d'Harry Potter als seus pares [...] Van ser assassinats el 1997 [...] No es diu on o quan es va produir l'homicidi."* | ⚠️ |
+| **v4** | SentenceWindowNodeParser | 392 | *"Lord Voldemort, nom de scène de Tom Riddle, és l'assassí dels pares d'Harry Potter: James i Lily Potter. Van ser assassinats el 31 d'octubre del 1981. Quan va intentar assassinar el nen Harry amb la maledicció Avada Kedavra, la maledicció es va rebotjar perquè s'hi va sacrificar l'amor de Lily, destruint temporalment el cos de Voldemort. Aquesta és la raó pel que es coneix el nen Harry com 'el noi que va viure'."* | ✅ |
+| **v5** | SemanticSplitterNodeParser | 121 | *"Els pares de Harry Potter foren assassinats per Lord Voldemort l'any 1981 del 31 d'octubre. James Potter fou el primer a ser assassinat per Voldemort, seguit per Lily Potter. Quan Voldemort intentà assassinar el nen Harry amb la maledicció Avada Kedavra, la maledicció es tornà contra ell gràcies al sacrifici d'amor de Lily, destruint temporalment l'espurna de Voldemort."* | ✅ |
+
+### Observaciones
+
+- **v4 y v5** responden correctamente en catalán, con todos los detalles: Voldemort, fecha, orden de las víctimas y mecanismo del hechizo. ✅
+- **v2** mezcla inglés y catalán ("parets" en lugar de "pares") — el error viene de la traducción final `translate_en_to_ca`, que falla con nombres propios en inglés. ⚠️
+- **v3** responde de forma vaga y con error de vocabulario ("assesor" en lugar de "assassí") — el retrieval jerárquico recupera menos contexto relevante en inglés que las otras versiones. ⚠️
+- **Scores de similitud bajos** (~0.64) en v3/v5 comparado con las pruebas en español (~0.81): se debe a que los documentos en inglés provienen de traducciones automáticas, lo que introduce variaciones que difuminan los embeddings originales.
+- El pipeline añade **~15-30 segundos extra** por consulta (traducción Ca→En + traducción En→Ca) respecto a las versiones en un solo idioma.
+
+### Comparativa con pruebas anteriores (español directo vs. pipeline Ca→En→Ca)
+
+| Versión | Español directo (pruebas previas) | Pipeline Ca→En→Ca |
+|---|---|---|
+| v2 | ✅ respuesta correcta y completa | ⚠️ respuesta parcial con errores de traducción |
+| v3 | ✅ respuesta correcta | ⚠️ respuesta vaga |
+| v4 | ✅ respuesta completa (mejor de todas) | ✅ respuesta completa (mejor de todas) |
+| v5 | ✅ respuesta correcta y completa | ✅ respuesta correcta y completa |
+
+**Conclusión:** El pipeline Ca→En→Ca es funcional. La calidad de la traducción del LLM es el factor limitante — `mistral:7b-instruct-q4_0` traduce correctamente el contenido pero puede cometer errores con vocabulario específico. **v4 y v5 siguen siendo las mejores opciones** incluso con el pipeline de traducción.
+
+*Pruebas realizadas el 8 de abril de 2026 · Pipeline Ca→En→Ca · LLM: mistral:7b-instruct-q4_0*
+
+---
+
+## Selección del modelo de traducción dedicado
+
+Tras las pruebas anteriores, se separó el modelo de traducción del LLM principal del RAG, usando la variable `TRANSLATION_MODEL` en `.env` y un módulo `translation.py` reutilizable. Se probaron distintos modelos para cada dirección del pipeline.
+
+### Prueba Ca→En — Texto: *"Qui va matar els pares de Harry Potter?"*
+
+| Modelo | Tamaño | Traducción obtenida | Correcta |
+|---|---|---|---|
+| `mistral:7b-instruct-q4_0` | 7B Q4 | *"Who is killing Harry Potter's parents?"* | ⚠️ (tiempo verbal incorrecto) |
+| `qwen2.5:3b` | 3B | *"Who killed Harry Potter's parents?"* | ✅ |
+| `aya-expanse:8b` | 8B | *"Who killed Harry Potter's parents?"* | ✅ |
+
+**Ganador Ca→En:** `qwen2.5:3b` y `aya-expanse:8b` (empate) — ambos corrigen el tiempo verbal. Se usa `qwen2.5:3b` por ser más ligero (3B vs 8B).
+
+---
+
+### Prueba En→Ca — Texto: *"Who killed Harry Potter's parents?"*
+
+| Modelo | Tamaño | Traducción obtenida | Correcta |
+|---|---|---|---|
+| `mistral:7b-instruct-q4_0` | 7B Q4 | *"Qui va matar els pares d'Harry Potter?"* | ✅ |
+| `aya-expanse:8b` | 8B | *"Qui va matar els parents de Harry Potter?"* | ⚠️ ("parents" = parientes, falso amigo) |
+| `qwen2.5:3b` | 3B | *"Quina mató als parels d'Harry Potter?"* | ❌ ("parels" ≠ "pares") |
+| `phi3:mini` | 3.8B | *"Qui assassinà els parells de Harry Potter?"* | ❌ ("parells" ≠ "pares") |
+
+> `qwen2.5:3b` y `phi3:mini` confunden "parents" (pares, familia) con el homófono parcial "pairs/parells" (pares, como número par). `aya-expanse:8b` usa el falso amigo "parents" (catalán: *parientes/familiares*) en lugar de "pares" (madre y padre). `mistral:7b-instruct-q4_0` tiene mejor soporte para lenguas romances y traduce correctamente.
+
+**Ganador En→Ca:** `mistral:7b-instruct-q4_0`.
+
+---
+
+### Configuración final — Modelos distintos por dirección
+
+```
+TRANSLATION_MODEL=qwen2.5:3b            # Ca→En (translate_ca_to_en)
+TRANSLATION_MODEL_CA=mistral:7b-instruct-q4_0  # En→Ca (translate_en_to_ca)
+```
+
+**Round-trip final con la configuración óptima:**
+
+| Paso | Texto |
+|---|---|
+| Original (ca) | *"Qui va matar els pares de Harry Potter?"* |
+| Ca→En (`qwen2.5:3b`) | *"Who killed Harry Potter's parents?"* ✅ |
+| En→Ca (`mistral:7b-instruct-q4_0`) | *"Qui va matar els pares d'Harry Potter?"* ✅ |
+
+El round-trip es prácticamente idéntico al original.
+
+*Pruebas realizadas el 8 de abril de 2026 · Modelos probados: qwen2.5:3b, phi3:mini, mistral:7b-instruct-q4_0, aya-expanse:8b*

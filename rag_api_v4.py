@@ -48,7 +48,7 @@ LLM_MODEL = os.getenv("LLM_MODEL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 EMBED_DIM = int(os.getenv("EMBED_DIM", 768))
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "rag_books", "docs")
+DOCS_DIR = os.path.join(os.path.dirname(__file__), "rag_books", "docs")
 
 # Ventana: cuántas frases vecinas (a cada lado) almacenar en metadatos
 WINDOW_SIZE = 3

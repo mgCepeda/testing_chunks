@@ -37,7 +37,7 @@ LLM_MODEL = os.getenv("LLM_MODEL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 EMBED_DIM = int(os.getenv("EMBED_DIM", 768))
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "rag_books", "docs")
+DOCS_DIR = os.path.join(os.path.dirname(__file__), "rag_books", "docs")
 
 CHUNK_SIZE = 500      # caracteres (~100 palabras)
 CHUNK_OVERLAP = 100   # caracteres de solapamiento

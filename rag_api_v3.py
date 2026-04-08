@@ -43,7 +43,7 @@ LLM_MODEL = os.getenv("LLM_MODEL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 EMBED_DIM = int(os.getenv("EMBED_DIM", 768))
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "rag_books", "docs")
+DOCS_DIR = os.path.join(os.path.dirname(__file__), "rag_books", "docs")
 
 # Fichero donde se guardan todos los nodos (padres + hijos) para no reprocesar
 DOCSTORE_PATH = os.path.join(os.path.dirname(__file__), "docstore_hier.json")
@@ -153,7 +153,7 @@ def get_retriever(top_k: int = 6):
 # --- Generación directa con Ollama REST (sin llama-index query engine) ---
 def generate_answer_stream(query: str, nodes: list):
     # Filtramos nodos con score bajo (ruido de otros libros)
-    MIN_SCORE = 0.65
+    MIN_SCORE = 0.60
     nodes = [n for n in nodes if n.score is None or n.score >= MIN_SCORE]
 
     if not nodes:
