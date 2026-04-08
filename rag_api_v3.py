@@ -14,6 +14,7 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+from translation import translate_ca_to_en, translate_en_to_ca
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 
@@ -96,7 +97,8 @@ def build_index():
     else:
         print("Procesando documentos por primera vez...")
         documents = SimpleDirectoryReader(DOCS_DIR).load_data()
-        print(f"  - Documentos cargados: {len(documents)}")
+        documents = [d for d in documents if "_en" in d.metadata.get("file_name", "")]
+        print(f"  - Documentos en inglés cargados: {len(documents)}")
 
         # Dos niveles: padres de ~1024 chars, hijos de ~256 chars
         node_parser = HierarchicalNodeParser.from_defaults(
@@ -156,7 +158,7 @@ def generate_answer_stream(query: str, nodes: list):
 
     if not nodes:
         def no_context():
-            msg = "Esa información no figura en los textos que tengo disponibles."
+            msg = "Aquesta informació no figura en els textos que tinc disponibles."
             yield f"data: {json.dumps({'token': msg})}\n\n"
             yield f"data: {json.dumps({'done': True})}\n\n"
         return no_context()
@@ -170,12 +172,12 @@ def generate_answer_stream(query: str, nodes: list):
     context = "\n\n".join(context_parts)
 
     prompt = (
-        f"Contexto relevante:\n{context}\n\n"
-        f"Pregunta del usuario: {query}\n\n"
-        f"Responde en español con todos los detalles que aparezcan en el contexto: "
-        f"nombres, fechas, lugares y hechos específicos. "
-        f"Si el contexto no contiene información relevante, indícalo claramente.\n"
-        f"Respuesta:"
+        f"Relevant context:\n{context}\n\n"
+        f"User question: {query}\n\n"
+        f"Answer in English with all details from the context: "
+        f"names, dates, places and specific facts. "
+        f"If the context does not contain relevant information, state it clearly.\n"
+        f"Answer:"
     )
 
     def stream_generator():
@@ -185,23 +187,18 @@ def generate_answer_stream(query: str, nodes: list):
                 json={
                     "model": LLM_MODEL,
                     "prompt": prompt,
-                    "stream": True,
+                    "stream": False,
                     "options": {"num_predict": 600, "temperature": 0.3, "top_p": 0.9},
                 },
-                stream=True,
                 timeout=180,
             )
-            for line in resp.iter_lines():
-                if line:
-                    obj = json.loads(line)
-                    token = obj.get("response", "")
-                    if token:
-                        for frase in FRASES_A_ELIMINAR:
-                            token = token.replace(frase, "")
-                        yield f"data: {json.dumps({'token': token})}\n\n"
-                    if obj.get("done"):
-                        yield f"data: {json.dumps({'done': True})}\n\n"
-                        break
+            answer_en = resp.json()["response"].strip()
+            answer_ca = translate_en_to_ca(answer_en)
+            words = answer_ca.split(" ")
+            for i, word in enumerate(words):
+                token = word if i == 0 else " " + word
+                yield f"data: {json.dumps({'token': token})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'token': f'Error: {str(e)}'})}\n\n"
             yield f"data: {json.dumps({'done': True})}\n\n"
@@ -242,10 +239,11 @@ def chat():
         return jsonify({"error": "La pregunta no puede estar vacía"}), 400
 
     try:
+        question_en = translate_ca_to_en(question)
         retriever = get_retriever(top_k=6)
-        nodes = retriever.retrieve(question)
+        nodes = retriever.retrieve(question_en)
         return Response(
-            stream_with_context(generate_answer_stream(question, nodes)),
+            stream_with_context(generate_answer_stream(question_en, nodes)),
             mimetype="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

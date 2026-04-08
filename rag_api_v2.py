@@ -13,6 +13,7 @@ import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
+from translation import translate_ca_to_en, translate_en_to_ca
 from psycopg2.extras import execute_values
 import numpy as np
 import requests
@@ -173,7 +174,7 @@ def process_documents():
     conn = get_conn()
     cur = conn.cursor()
 
-    files = [f for f in os.listdir(DOCS_DIR) if f.endswith(".txt") or f.endswith(".pdf")]
+    files = [f for f in os.listdir(DOCS_DIR) if f.endswith("_en.txt") or f.endswith(".pdf")]
     print(f"Documentos encontrados: {len(files)}")
 
     for file_name in files:
@@ -236,7 +237,7 @@ def get_similar_chunks(query: str, top_k: int = 4):
 def generate_answer_stream(query: str, chunks: list):
     if not chunks:
         def no_context():
-            msg = "Esa información no figura en los textos que tengo disponibles."
+            msg = "Aquesta informació no figura en els textos que tinc disponibles."
             yield f"data: {json.dumps({'token': msg})}\n\n"
             yield f"data: {json.dumps({'done': True})}\n\n"
         return no_context()
@@ -248,13 +249,13 @@ def generate_answer_stream(query: str, chunks: list):
     prompt = (
         f"Read this information carefully:\n"
         f"---\n{context}\n---\n\n"
-        f"Based ONLY on the information above, answer in Spanish as a literary expert.\n"
+        f"Based ONLY on the information above, answer in English as a literary expert.\n"
         f"Be direct and specific. Mention names, dates and details from the text.\n"
         f"Do not say 'the context' or 'according to'. Answer directly.\n"
         f"If the answer is not in the text above, say: "
-        f"'Esa información no figura en los textos que tengo disponibles'.\n\n"
+        f"'That information is not found in the texts available to me'.\n\n"
         f"Question: {query}\n"
-        f"Answer in Spanish:"
+        f"Answer in English:"
     )
 
     def stream_generator():
@@ -264,23 +265,18 @@ def generate_answer_stream(query: str, chunks: list):
                 json={
                     "model": LLM_MODEL,
                     "prompt": prompt,
-                    "stream": True,
+                    "stream": False,
                     "options": {"num_predict": 400, "temperature": 0.3, "top_p": 0.9},
                 },
-                stream=True,
                 timeout=180,
             )
-            for line in resp.iter_lines():
-                if line:
-                    obj = json.loads(line)
-                    token = obj.get("response", "")
-                    if token:
-                        for frase in FRASES_A_ELIMINAR:
-                            token = token.replace(frase, "")
-                        yield f"data: {json.dumps({'token': token})}\n\n"
-                    if obj.get("done"):
-                        yield f"data: {json.dumps({'done': True})}\n\n"
-                        break
+            answer_en = resp.json()["response"].strip()
+            answer_ca = translate_en_to_ca(answer_en)
+            words = answer_ca.split(" ")
+            for i, word in enumerate(words):
+                token = word if i == 0 else " " + word
+                yield f"data: {json.dumps({'token': token})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'token': f'Error: {str(e)}'})}\n\n"
             yield f"data: {json.dumps({'done': True})}\n\n"
@@ -316,9 +312,10 @@ def chat():
         return jsonify({"error": "La pregunta no puede estar vacía"}), 400
 
     try:
-        chunks = get_similar_chunks(question, top_k=4)
+        question_en = translate_ca_to_en(question)
+        chunks = get_similar_chunks(question_en, top_k=4)
         return Response(
-            stream_with_context(generate_answer_stream(question, chunks)),
+            stream_with_context(generate_answer_stream(question_en, chunks)),
             mimetype="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
