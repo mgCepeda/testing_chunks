@@ -52,6 +52,31 @@ Resultado práctico con `qwen2.5:3b`: el retriever recupera chunks parcialmente 
 
 No existe ningún modelo disponible en Ollama que sea excelente en ambas tareas. Los modelos "duales" como `E5-mistral-7b` o `GTE-Qwen2-7B` (generativos re-entrenados para embeddings con datos contrastivos) no están disponibles en Ollama, y al ser re-entrenados para embeddings pierden capacidad generativa.
 
+### Alternativa: modelos duales vía HuggingFace
+
+Existen modelos entrenados específicamente para ser buenos en embeddings *y* generación, disponibles en **Hugging Face** (no en Ollama):
+
+| Modelo | Parámetros | Disco | Disponible en |
+|---|---|---|---|
+| [`intfloat/e5-mistral-7b-instruct`](https://huggingface.co/intfloat/e5-mistral-7b-instruct) | 7B | ~14 GB | HuggingFace |
+| [`Alibaba-NLP/gte-Qwen2-7B-instruct`](https://huggingface.co/Alibaba-NLP/gte-Qwen2-7B-instruct) | 7B | ~15 GB | HuggingFace |
+
+Se pueden usar directamente con LlamaIndex sin Ollama:
+
+```python
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+embed_model = HuggingFaceEmbedding(model_name="intfloat/e5-mistral-7b-instruct")
+# requiere: pip install llama-index-embeddings-huggingface
+```
+
+El modelo se descarga automáticamente en `~/.cache/huggingface/` en el primer uso.
+
+**Limitaciones prácticas para RAG local:**
+- Pesan ~14-15 GB (el doble que mistral)
+- Requieren ~8-10 GB de RAM solo para el modelo de embeddings
+- La mejora sobre `nomic-embed-text` en corpus pequeños es marginal
+- Se justifican en producción con corpus masivos y GPUs dedicadas, no en RAG local con CPU
+
 ---
 
 ## Resumen de recursos
